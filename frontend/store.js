@@ -4,6 +4,7 @@
 
 const IMG = "app/static/emoji/";
 const CATALOG = "app/static/catalog.json";
+const PHOTOS = "app/static/photos.json";
 const FREE_DELIVERY = 199, DELIVERY_FEE = 25, HANDLING = 4;
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -61,7 +62,7 @@ function createApp(root) {
     P: [], byId: new Map(), cats: {}, catImg: {}, ready: false,
     cart: storeLoad(), view: { name: "home" }, listLimit: 40,
     filters: { sort: "pop", r4: false, deal: false, u100: false },
-    search: null, searchSent: null, chat: [], chatSent: null, pendingQ: null,
+    photos: {}, search: null, searchSent: null, chat: [], chatSent: null, pendingQ: null,
     details: {}, detailsSent: new Set(), trigger: null, mode: "hybrid", data: {},
   };
 
@@ -91,7 +92,7 @@ function createApp(root) {
     <div><b>BasketBuddy</b> · demo quick-commerce store with a RAG shopping assistant.<br>
       Catalogue: Kaggle “BigBasket Entire Product List” (CC BY-NC-SA 4.0), a dataset snapshot.
       Not affiliated with or endorsed by BigBasket. No real orders or payments.</div>
-    <div>Illustrations: Microsoft Fluent Emoji (MIT)<br>
+    <div>Photos: <a href="https://unsplash.com/?utm_source=basketbuddy_student_rag&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a> photographers (<button data-a="credits">credits</button>) · Illustrations: Microsoft Fluent Emoji (MIT)<br>
       <button data-a="classic">Open the classic Streamlit chat →</button></div>
   </div></footer>
   <button class="fab" data-a="ai"><img src="${IMG}1f916.webp" alt=""><span>Ask BasketBuddy AI</span></button>
@@ -117,6 +118,11 @@ function createApp(root) {
 
   // ------------------------------------------------------------------ helpers
   const img = (p) => IMG + (p.img || "1f6d2.webp");
+  // Real photo (Unsplash, hotlinked) for the product's image concept, if one was picked.
+  const photo = (p) => S.photos[(p.img || "").replace(".webp", "").replace("-fe0f", "")];
+  const pimg = (p, lazy = true) => { const ph = photo(p); return ph
+    ? `<img class="photo" ${lazy ? 'loading="lazy"' : ""} src="${esc(ph.url)}" alt="${esc(ph.alt)}">`
+    : `<img ${lazy ? 'loading="lazy"' : ""} src="${img(p)}" alt="">`; };
   const qty = (id) => S.cart[id] || 0;
   function toast(t) { const n = $("toast"); n.textContent = t; n.classList.add("on");
     clearTimeout(S._t); S._t = setTimeout(() => n.classList.remove("on"), 1600); }
@@ -134,7 +140,7 @@ function createApp(root) {
     const rib = p.off >= 1 ? `<span class="ribbon">${p.off}%<br>OFF</span>` : "";
     const rt = p.rating ? `<span class="rt">★ ${p.rating.toFixed(1)}</span>` : "";
     return `<div class="pc" data-pid="${p.id}">
-      <div class="pc-img" data-a="open" data-id="${p.id}">${rib}<img loading="lazy" src="${img(p)}" alt=""></div>
+      <div class="pc-img" data-a="open" data-id="${p.id}">${rib}${pimg(p)}</div>
       <span class="pc-eta">⚡ 10 MINS</span>
       <div class="pc-brand">${esc(p.brand)}</div>
       <div class="pc-name" data-a="open" data-id="${p.id}" title="${esc(p.name)}">${esc(p.name)}</div>
@@ -197,7 +203,7 @@ function createApp(root) {
     $("cartBody").innerHTML = (gap > 0 ? `<div class="freebar">Add items worth ${inr(gap)} more for FREE delivery</div>`
       : `<div class="freebar" style="background:#ecfdf5;color:#047857">🎉 You've unlocked FREE delivery</div>`) +
       `<div class="box">${ids.map((id) => { const p = S.byId.get(+id); return !p ? "" : `<div class="ci">
-        <div class="im"><img src="${img(p)}" alt=""></div><div><div class="n">${esc(p.name)}</div>
+        <div class="im">${pimg(p)}</div><div><div class="n">${esc(p.name)}</div>
         <div class="p"><b>${inr(p.price)}</b>${p.mrp > p.price ? `<s>${inr(p.mrp)}</s>` : ""}</div></div>
         <span class="addslot" data-id="${p.id}">${addBtn(p)}</span></div>`; }).join("")}</div>
       <div class="box"><b>Bill details</b>${billHtml(t)}</div>`;
@@ -342,7 +348,7 @@ function createApp(root) {
     const d = S.details[id];
     if (!d && !S.detailsSent.has(id)) { S.detailsSent.add(id); S.trigger("details", id); }
     $("pd").innerHTML = `<button class="x" data-a="close">✕</button>
-      <div class="pd-img">${p.off >= 1 ? `<span class="ribbon" style="left:16px">${p.off}%<br>OFF</span>` : ""}<img src="${img(p)}" alt=""></div>
+      <div class="pd-img">${p.off >= 1 ? `<span class="ribbon" style="left:16px">${p.off}%<br>OFF</span>` : ""}${pimg(p, false)}</div>
       <div class="pd"><div class="crumbs">${esc(p.cat)} › ${esc(p.sub)} › ${esc(p.type)}</div>
         <h2>${esc(p.name)}</h2><span class="br">${esc(p.brand)}</span>
         ${p.rating ? ` · <span class="rt">★ ${p.rating.toFixed(1)}</span>` : ` · <span style="color:#6b7280;font-size:12px">Not rated</span>`}
@@ -352,7 +358,10 @@ function createApp(root) {
           <button class="ask" data-a="ask" data-v="${esc(`Tell me about ${p.name} by ${p.brand}: what is it, its price and rating?`)}">✨ Ask AI about this</button></div>
         <h4>Product details</h4><div class="desc" id="pdDesc">${d ? esc(d) : "Loading description…"}</div>
         <h4>Information</h4><div class="facts"><span>Brand</span><span>${esc(p.brand)}</span><span>Category</span><span>${esc(p.cat)}</span>
-          <span>Type</span><span>${esc(p.type)}</span><span>Source</span><span>Kaggle BigBasket dataset</span></div></div>`;
+          <span>Type</span><span>${esc(p.type)}</span><span>Source</span><span>Kaggle BigBasket dataset</span></div>
+        ${photo(p) ? `<p class="credit">Illustrative photo of the product type (not the exact item) by
+          <a href="${esc(photo(p).author_url)}" target="_blank" rel="noopener">${esc(photo(p).author)}</a> on
+          <a href="${esc(photo(p).unsplash_url)}" target="_blank" rel="noopener">Unsplash</a></p>` : ""}</div>`;
     $("modal").classList.add("on"); S.openPid = id;
   }
 
@@ -369,7 +378,7 @@ function createApp(root) {
       if (m.role === "user") { h += `<div class="msg u"><div class="bub">${esc(m.content)}</div></div>`; return; }
       const meta = m.meta || {}, prods = (m.ids || []).map((id) => S.byId.get(id)).filter(Boolean);
       const minis = !meta.fallback && prods.length ? `<div class="minis">${prods.map((p) => `<div class="mini">
-          <div class="im" data-a="open" data-id="${p.id}"><img src="${img(p)}" alt=""></div><div class="n">${esc(p.name)}</div>
+          <div class="im" data-a="open" data-id="${p.id}">${pimg(p)}</div><div class="n">${esc(p.name)}</div>
           <div class="pr">${inr(p.price)}<span class="addslot" data-id="${p.id}">${addBtn(p)}</span></div></div>`).join("")}</div>
           <div class="links"><button data-a="showids" data-i="${i}">View these ${prods.length} in the store ›</button></div>` : "";
       const kv = [["Best similarity", `${(meta.best || 0).toFixed(2)} (threshold ${meta.threshold})`], ["Retrieval", meta.mode],
@@ -417,7 +426,7 @@ function createApp(root) {
     const hits = []; for (const p of S.P) { const s = (p.name + " " + p.brand).toLowerCase();
       if (words.every((w) => s.includes(w))) { hits.push(p); if (hits.length >= 6) break; } }
     sg.innerHTML = hits.map((p, i) => `<button data-a="open" data-id="${p.id}" class="${i === hl ? "hl" : ""}">
-        <img src="${img(p)}" alt=""><span>${esc(p.name)}<small>${esc(p.brand)} · ${inr(p.price)}</small></span></button>`).join("") +
+        ${pimg(p)}<span>${esc(p.name)}<small>${esc(p.brand)} · ${inr(p.price)}</small></span></button>`).join("") +
       `<button class="ai" data-a="ask" data-v="${esc(sq.value.trim())}">✨ Ask AI about “${esc(sq.value.trim())}”</button>`;
     sg.classList.add("on");
   }
@@ -458,6 +467,16 @@ function createApp(root) {
       case "place": { const no = "BB" + Math.floor(100000 + Math.random() * 900000); S.cart = {}; storeSave(S.cart);
         renderCartBtn(); S.view = { name: "checkout", done: no }; render(); scrollTop(); break; }
       case "classic": S.trigger("nav", "classic"); break;
+      case "credits": {
+        const used = Object.values(S.photos);
+        $("pd").innerHTML = `<button class="x" data-a="close">✕</button><div class="pd" style="grid-column:1/-1">
+          <h2>Photo credits</h2><p class="credit">Product photos are illustrative photos of each product type, hotlinked from
+          <a href="https://unsplash.com/?utm_source=basketbuddy_student_rag&utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>.
+          Products without a photo use Microsoft Fluent Emoji 3D illustrations (MIT).</p>
+          <div class="credits">${used.map((c) => `<a href="${esc(c.photo_url)}" target="_blank" rel="noopener">
+            <img src="${esc(c.url)}" alt="${esc(c.alt)}" loading="lazy"><span>${esc(c.query)}<small>by ${esc(c.author)}</small></span></a>`).join("")}</div></div>`;
+        $("modal").classList.add("on"); break;
+      }
     }
   });
 
@@ -488,6 +507,8 @@ function createApp(root) {
     S.cats = Object.fromEntries(Object.entries(S.cats).sort((a, b) => b[1] - a[1]));
     S.catImg = j.cats || {};
     S.ready = true; renderCartBtn(); render(); S.update(S.data);
+    // Optional real photos; the store works with illustrations if this file is missing.
+    fetch(PHOTOS).then((r) => (r.ok ? r.json() : {})).then((ph) => { S.photos = ph || {}; render(); }).catch(() => {});
   }).catch(() => { $("view").innerHTML = `<div class="empty"><b>Couldn't load the catalogue.</b><p>Please refresh the page.</p></div>`; });
 
   return S;

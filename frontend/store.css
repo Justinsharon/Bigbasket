@@ -361,3 +361,17 @@ details.rd .kv b { color: var(--muted); font-weight: 600; }
   .fab span { display: none; } .fab { padding: 8px; }
   .ai-drawer, .drawer { width: 100%; }
 }
+
+/* real photos (Unsplash) */
+.pc-img, .ci .im, .mini .im, .pd-img { overflow: hidden; }
+img.photo { width: 100% !important; height: 100% !important; object-fit: cover; filter: none !important; }
+.pc-img img.photo { border-radius: 10px; }
+.pd-img img.photo { position: absolute; inset: 0; border-radius: inherit; }
+.suggest img.photo { width: 28px !important; height: 28px !important; border-radius: 6px; flex: none; }
+.ribbon { z-index: 1; }
+.credit { font-size: 11px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+.credit a, .foot-in a { color: var(--brand); font-weight: 600; }
+.credits { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 12px; }
+.credits a { display: flex; gap: 8px; align-items: center; text-decoration: none; color: var(--ink); font-size: 12px; }
+.credits img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: none; }
+.credits small { display: block; color: var(--muted); }
