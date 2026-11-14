@@ -1,4 +1,4 @@
-# 🛒 BigBasket Product Assistant — RAG Chatbot
+# 🧺 BasketBuddy: RAG shopping assistant for the BigBasket catalogue
 
 A Retrieval-Augmented Generation (RAG) chatbot that helps shoppers discover and compare
 products in **BigBasket's** online grocery catalogue. Answers are grounded only in the
@@ -115,18 +115,37 @@ vs hybrid), whether the bot fell back, and the full answer.
 4. **Free-tier LLM reliability.** Free models get rate-limited and change often. *Fix (in place):*
    a model fallback chain. For the demo, a paid model costing a few cents.
 
-## Screenshots
-| Welcome | Comparison with product cards | Unsupported question → fallback |
-|---|---|---|
-| ![](docs/screenshots/1-welcome.png) | ![](docs/screenshots/2-comparison.png) | ![](docs/screenshots/3-fallback.png) |
+## The app
+BasketBuddy is an original online grocery store design with the RAG assistant built in:
+- **Store:** search (hybrid retrieval), 11 category tiles, product grid with price, MRP,
+  discount badge and rating, filters (price, rating, discounted only), sorting, pagination, and a
+  product-details popup with an "Ask BasketBuddy about this product" button.
+- **Assistant panel:** chat with grounded answers, the products used (compact cards), "Show these in
+  the store", and retrieval details (similarity, query decomposition, filters, model, timing,
+  raw chunks).
+- **Images:** the dataset has no images, so every product is mapped to a **Microsoft Fluent Emoji
+  3D** illustration (MIT, see `static/emoji/LICENSE.md`). The lookup is item keyword (fresh and
+  staple categories, e.g. onion → 🧅), then product type (all 426 mapped), then category. All
+  26,028 products are covered with 169 images (768 KB), served from `static/` with Streamlit
+  static serving.
+
+| Store | Search "onion" |
+|---|---|
+| ![](docs/screenshots/1-store.png) | ![](docs/screenshots/2-search-onion.png) |
+| **Assistant answer + products used** | **Product details** |
+| ![](docs/screenshots/3-assistant.png) | ![](docs/screenshots/4-details.png) |
+
+*Student project. Not affiliated with or endorsed by BigBasket.*
 
 ## Project structure
 ```
-app.py              Streamlit chat UI
+app.py              Streamlit store + assistant UI
 evaluate.py         Test questions → docs/evaluation.md
 src/config.py       All settings (chunk size, k, threshold, models)
 src/ingest.py       Clean → chunk → embed → FAISS
 src/embeddings.py   Embedding model (shared by ingest + query)
+src/images.py       Product → illustration mapping
+static/emoji/       Fluent Emoji 3D images (MIT)
 src/rag.py          Hybrid retrieval, decomposition, filters, fallback, LLM chain
 docs/evaluation.md  Test results
 data/raw/           Original Kaggle CSV
