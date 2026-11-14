@@ -116,40 +116,56 @@ vs hybrid), whether the bot fell back, and the full answer.
    a model fallback chain. For the demo, a paid model costing a few cents.
 
 ## The app
-BasketBuddy is an original online grocery store design with the RAG assistant built in:
-- **Store:** search (hybrid retrieval), 11 category tiles, product grid with price, MRP,
-  discount badge and rating, filters (price, rating, discounted only), sorting, pagination, and a
-  product-details popup with an "Ask BasketBuddy about this product" button.
-- **Assistant panel:** chat with grounded answers, the products used (compact cards), "Show these in
-  the store", and retrieval details (similarity, query decomposition, filters, model, timing,
-  raw chunks).
-- **Images:** the dataset has no images, so every product is mapped to a **Microsoft Fluent Emoji
-  3D** illustration (MIT, see `static/emoji/LICENSE.md`). The lookup is item keyword (fresh and
-  staple categories, e.g. onion → 🧅), then product type (all 426 mapped), then category. All
-  26,028 products are covered with 169 images (768 KB), served from `static/` with Streamlit
-  static serving.
+BasketBuddy is an original **quick-commerce storefront** (demo) with the RAG assistant built in.
+The storefront is real HTML/CSS/JS, mounted in Streamlit as a **Custom Component v2**. It renders
+in the page with no iframe and talks to Python through trigger values. The app is still a single
+Streamlit app (`streamlit run app.py`).
 
-| Store | Search "onion" |
+| Feature | How it works |
 |---|---|
-| ![](docs/screenshots/1-store.png) | ![](docs/screenshots/2-search-onion.png) |
-| **Assistant answer + products used** | **Product details** |
-| ![](docs/screenshots/3-assistant.png) | ![](docs/screenshots/4-details.png) |
+| Home page | Promo banners, 11 category tiles, product rails (top deals, fresh, dairy, snacks under ₹50…) built from the dataset |
+| Browse | Category pages with a sub-category sidebar, filter chips (on offer / 4★+ / under ₹100), sorting, "show more" |
+| Search | Instant type-ahead in the browser, then **hybrid RAG retrieval** in Python (BM25 + FAISS + RRF) for the results page |
+| Product page | Popup with image, price, MRP, discount, rating and the full description (fetched from the index), plus "Ask AI about this" |
+| Basket | Add / − / + on every card, a basket drawer with savings, free-delivery threshold and bill details, and a demo checkout (no payment) |
+| **BasketBuddy AI** | Chat drawer that calls `rag.answer()`: grounded answer, product cards you can add to the basket, "view in store", and a "How I found this" panel (similarity, decomposition, filters, model, time). Unsupported questions get the fallback. |
+| Classic chat | `/chat` page with Streamlit's `st.chat_input` and the same pipeline (the brief's "Streamlit chat input" requirement) |
 
-*Student project. Not affiliated with or endorsed by BigBasket.*
+**Data flow:** `static/catalog.json` (slim catalogue exported from the index, about 1 MB gzipped) loads once in
+the browser for browsing and the basket. Search, chat and product descriptions round-trip to Python.
+LLM output and dataset text are HTML-escaped before rendering.
+
+**Images:** the dataset has no images, so every product is mapped to a **Microsoft Fluent Emoji 3D**
+illustration (MIT, `static/emoji/LICENSE.md`). The lookup is item keyword (fresh and staple
+categories, e.g. onion → 🧅), then product type (all 426 mapped), then category.
+
+| Home | Category | Search + basket steppers |
+|---|---|---|
+| ![](docs/screenshots/1-home.png) | ![](docs/screenshots/2-category.png) | ![](docs/screenshots/3-search.png) |
+| **Product page** | **Basket** | **AI assistant** |
+| ![](docs/screenshots/4-product.png) | ![](docs/screenshots/5-basket.png) | ![](docs/screenshots/6-assistant.png) |
+| **Fallback (not in catalogue)** | **Order placed (demo)** | **Mobile** |
+| ![](docs/screenshots/7-fallback.png) | ![](docs/screenshots/8-order.png) | ![](docs/screenshots/9-mobile.png) |
+
+*Demo store for a student project. Not affiliated with or endorsed by BigBasket. No real orders or payments.*
 
 ## Project structure
 ```
-app.py              Streamlit store + assistant UI
-evaluate.py         Test questions → docs/evaluation.md
-src/config.py       All settings (chunk size, k, threshold, models)
-src/ingest.py       Clean → chunk → embed → FAISS
-src/embeddings.py   Embedding model (shared by ingest + query)
-src/images.py       Product → illustration mapping
-static/emoji/       Fluent Emoji 3D images (MIT)
-src/rag.py          Hybrid retrieval, decomposition, filters, fallback, LLM chain
-docs/evaluation.md  Test results
-data/raw/           Original Kaggle CSV
-vectorstore/        Saved FAISS index
+app.py                    Entry point: routes to the store and classic chat pages
+views/store.py            Storefront page: mounts the component, handles search/ask/details
+views/classic_chat.py     Streamlit st.chat_input chat over the same pipeline
+frontend/store.{js,css}   Storefront UI (Custom Component v2)
+src/config.py             All settings (chunk size, k, threshold, models)
+src/ingest.py             Clean → chunk → embed → FAISS
+src/embeddings.py         Embedding model (shared by ingest + query)
+src/rag.py                Hybrid retrieval, decomposition, filters, fallback, LLM chain
+src/images.py             Product → illustration mapping
+src/shared.py             Cached loaders shared by the pages
+scripts/export_catalog.py Builds static/catalog.json from the index
+static/                   catalog.json + Fluent Emoji 3D images (served by Streamlit)
+evaluate.py               Test questions → docs/evaluation.md
+data/raw/                 Original Kaggle CSV
+vectorstore/              Saved FAISS index
 ```
 
 ## Run locally
@@ -158,7 +174,7 @@ pip install -r requirements.txt
 cp .env.example .env          # add OPENROUTER_API_KEY and/or GEMINI_API_KEY
 streamlit run app.py          # the prebuilt index in vectorstore/ loads in about 6 s
 ```
-Rebuild the index (only if you change the data or chunking): `python -m src.ingest` (about 12 min on CPU).
+Rebuild the index (only if you change the data or chunking): `python -m src.ingest` (about 12 min on CPU), then `python -m scripts.export_catalog`.
 
 ## Deploy on Streamlit Community Cloud
 1. Go to [share.streamlit.io](https://share.streamlit.io) → **Create app** → *Deploy a public app from GitHub*.
