@@ -143,15 +143,17 @@ LLM output and dataset text are HTML-escaped before rendering.
 photo** (`scripts/fetch_photos.py`, hotlinked with photographer credit as the Unsplash API guidelines
 require), falling back to a **Microsoft Fluent Emoji 3D** illustration (MIT) where no photo was picked.
 
-| Home | Category | Search + cart steppers + wishlist |
+| Home | Category | Search + cart |
 |---|---|---|
 | ![](docs/screenshots/1-home.png) | ![](docs/screenshots/2-category.png) | ![](docs/screenshots/3-search.png) |
-| **Product page** | **Cart with coupon** | **AI assistant** |
-| ![](docs/screenshots/4-product.png) | ![](docs/screenshots/5-cart.png) | ![](docs/screenshots/6-assistant.png) |
-| **Fallback (not in catalogue)** | **Wishlist** | **Checkout** |
-| ![](docs/screenshots/7-fallback.png) | ![](docs/screenshots/8-wishlist.png) | ![](docs/screenshots/9-checkout.png) |
-| **Order placed (demo)** | **Mobile** | |
-| ![](docs/screenshots/10-order.png) | ![](docs/screenshots/11-mobile.png) | |
+| **Buddy (assistant)** | **Buddy answering** | **Buddy fallback** |
+| ![](docs/screenshots/4-buddy.png) | ![](docs/screenshots/6-buddy-answer.png) | ![](docs/screenshots/7-buddy-fallback.png) |
+| **Cart** | **Mobile** | **Mobile Buddy** |
+| ![](docs/screenshots/8-cart.png) | ![](docs/screenshots/9-mobile.png) | ![](docs/screenshots/10-mobile-buddy.png) |
+
+**Buddy** is the assistant's full-screen mode: an animated particle orb (canvas), voice input through the
+browser's Web Speech API where available, typed input everywhere, answers with add-to-cart product cards.
+Append `?demo=1` to the URL to show the retrieval details for a presentation.
 
 *Demo store for a student project. Not affiliated with or endorsed by BigBasket. No real orders or payments.*
 
