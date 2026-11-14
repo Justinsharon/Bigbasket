@@ -1,12 +1,31 @@
 """Objects shared by the Streamlit pages (cached once per server process)."""
+import hashlib
+from pathlib import Path
+
 import streamlit as st
 
-from src.rag import BigBasketRAG
+
+def _code_version() -> str:
+    """Fingerprint of the pipeline code, so a redeploy never keeps answering with an old prompt."""
+    h = hashlib.sha1()
+    for name in ("rag.py", "config.py"):
+        h.update((Path(__file__).parent / name).read_bytes())
+    return h.hexdigest()[:12]
 
 
-@st.cache_resource(show_spinner="Loading the catalogue and search indexes…")
-def load_rag() -> BigBasketRAG:
-    return BigBasketRAG()
+@st.cache_resource(show_spinner="Opening the store…", max_entries=1)
+def _load_rag(version: str):
+    import importlib
+
+    import src.config
+    import src.rag
+
+    importlib.reload(src.config)
+    return importlib.reload(src.rag).BigBasketRAG()
+
+
+def load_rag():
+    return _load_rag(_code_version())
 
 
 @st.cache_resource(show_spinner=False)

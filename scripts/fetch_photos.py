@@ -89,8 +89,8 @@ def call(session, url, **params):
     while True:
         r = session.get(url, params=params, timeout=30)
         if r.status_code == 403 and "Rate Limit" in r.text or r.status_code == 429:
-            print("  rate limited; sleeping 5 min", flush=True)
-            time.sleep(300)
+            print("  rate limited; waiting for the hourly limit to reset (61 min)", flush=True)
+            time.sleep(3660)
             continue
         r.raise_for_status()
         remaining = int(r.headers.get("X-Ratelimit-Remaining", "1"))
