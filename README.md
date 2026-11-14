@@ -116,36 +116,42 @@ vs hybrid), whether the bot fell back, and the full answer.
    a model fallback chain. For the demo, a paid model costing a few cents.
 
 ## The app
-BasketBuddy is an original **quick-commerce storefront** (demo) with the RAG assistant built in.
-The storefront is real HTML/CSS/JS, mounted in Streamlit as a **Custom Component v2**. It renders
-in the page with no iframe and talks to Python through trigger values. The app is still a single
-Streamlit app (`streamlit run app.py`).
+BasketBuddy is an original **grocery storefront** (demo) with the RAG assistant built in. Its soft
+fresh-market style uses mint/cream backgrounds, white rounded cards, a greeting header, a delivery-slot
+banner, coupon tickets, photo category tiles, and a cart of item cards. The storefront is real
+HTML/CSS/JS mounted in Streamlit as a **Custom Component v2**, so it renders in the page with no
+iframe and talks to Python through trigger values. It is still a single Streamlit app
+(`streamlit run app.py`).
 
 | Feature | How it works |
 |---|---|
-| Home page | Promo banners, 11 category tiles, product rails (top deals, fresh, dairy, snacks under ₹50…) built from the dataset |
-| Browse | Category pages with a sub-category sidebar, filter chips (on offer / 4★+ / under ₹100), sorting, "show more" |
-| Search | Instant type-ahead in the browser, then **hybrid RAG retrieval** in Python (BM25 + FAISS + RRF) for the results page |
-| Product page | Popup with image, price, MRP, discount, rating and the full description (fetched from the index), plus "Ask AI about this" |
-| Basket | Add / − / + on every card, a basket drawer with savings, free-delivery threshold and bill details, and a demo checkout (no payment) |
-| **BasketBuddy AI** | Chat drawer that calls `rag.answer()`: grounded answer, product cards you can add to the basket, "view in store", and a "How I found this" panel (similarity, decomposition, filters, model, time). Unsupported questions get the fallback. |
-| Classic chat | `/chat` page with Streamlit's `st.chat_input` and the same pipeline (the brief's "Streamlit chat input" requirement) |
+| Home page | Greeting + Instant / Next-day delivery toggle, delivery-slot banner, 3 demo coupons, category tiles, product rails |
+| Browse | Category pages with sub-category tabs, in-page search, filter chips (on offer / 4★+ / under ₹100), sorting |
+| Search | Instant type-ahead in the browser, then **hybrid RAG retrieval** in Python (BM25 + FAISS + RRF) |
+| Product page | Photo, price, MRP, discount, rating, full description from the index, wishlist, "Ask AI" |
+| Wishlist | Heart on every card, wishlist page (saved in the browser) |
+| Cart | Item cards with unit price × qty, subtotal, stepper and remove; delivery note; free-delivery progress; "Before you checkout" picks; demo coupons; bill details; demo checkout (no payment) |
+| **BasketBuddy AI** | Chat drawer calling `rag.answer()`: grounded answer, product cards you can add to the cart, "view in store", and "How I found this" (similarity, decomposition, filters, model, time). Unsupported questions get the fallback. |
+| Classic chat | `/chat` page with Streamlit's `st.chat_input` and the same pipeline (the brief's requirement) |
 
 **Data flow:** `static/catalog.json` (slim catalogue exported from the index, about 1 MB gzipped) loads once in
 the browser for browsing and the basket. Search, chat and product descriptions round-trip to Python.
 LLM output and dataset text are HTML-escaped before rendering.
 
-**Images:** the dataset has no images, so every product is mapped to a **Microsoft Fluent Emoji 3D**
-illustration (MIT, `static/emoji/LICENSE.md`). The lookup is item keyword (fresh and staple
-categories, e.g. onion → 🧅), then product type (all 426 mapped), then category.
+**Images:** the dataset has no product images. Each product is mapped to an image concept
+(item keyword → product type → category; 169 concepts). Each concept gets an **illustrative Unsplash
+photo** (`scripts/fetch_photos.py`, hotlinked with photographer credit as the Unsplash API guidelines
+require), falling back to a **Microsoft Fluent Emoji 3D** illustration (MIT) where no photo was picked.
 
-| Home | Category | Search + basket steppers |
+| Home | Category | Search + cart steppers + wishlist |
 |---|---|---|
 | ![](docs/screenshots/1-home.png) | ![](docs/screenshots/2-category.png) | ![](docs/screenshots/3-search.png) |
-| **Product page** | **Basket** | **AI assistant** |
-| ![](docs/screenshots/4-product.png) | ![](docs/screenshots/5-basket.png) | ![](docs/screenshots/6-assistant.png) |
-| **Fallback (not in catalogue)** | **Order placed (demo)** | **Mobile** |
-| ![](docs/screenshots/7-fallback.png) | ![](docs/screenshots/8-order.png) | ![](docs/screenshots/9-mobile.png) |
+| **Product page** | **Cart with coupon** | **AI assistant** |
+| ![](docs/screenshots/4-product.png) | ![](docs/screenshots/5-cart.png) | ![](docs/screenshots/6-assistant.png) |
+| **Fallback (not in catalogue)** | **Wishlist** | **Checkout** |
+| ![](docs/screenshots/7-fallback.png) | ![](docs/screenshots/8-wishlist.png) | ![](docs/screenshots/9-checkout.png) |
+| **Order placed (demo)** | **Mobile** | |
+| ![](docs/screenshots/10-order.png) | ![](docs/screenshots/11-mobile.png) | |
 
 *Demo store for a student project. Not affiliated with or endorsed by BigBasket. No real orders or payments.*
 
