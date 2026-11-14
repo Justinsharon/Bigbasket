@@ -10,4 +10,4 @@ from src.config import EMBED_MODEL  # noqa: E402
 
 def get_embeddings() -> FastEmbedEmbeddings:
     # Vectors are L2-normalised, so FAISS inner product = cosine similarity.
-    return FastEmbedEmbeddings(model_name=EMBED_MODEL, batch_size=256)
+    return FastEmbedEmbeddings(model_name=EMBED_MODEL, batch_size=64)

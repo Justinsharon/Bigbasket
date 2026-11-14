@@ -32,7 +32,7 @@ as unsupported. About 31% of products have no rating and are shown as "Not rated
 CSV ──► clean ──► one document per product ──► chunk long descriptions
                     (header + description)        (800 chars, 100 overlap)
                                                          │
-                                       FastEmbed bge-small-en-v1.5 (384-d)
+                                       FastEmbed all-MiniLM-L6-v2 (384-d)
                                                          │
                         FAISS (inner product = cosine) + BM25 keyword index
                                                          │
@@ -50,8 +50,10 @@ CSV ──► clean ──► one document per product ──► chunk long desc
    product they describe. Only descriptions longer than **800 characters** are split with
    `RecursiveCharacterTextSplitter`, with **100 characters of overlap** so a sentence cut at the
    boundary is still found. Every piece repeats the product header so it stays self-contained.
-3. **Embeddings**: `BAAI/bge-small-en-v1.5` through FastEmbed (ONNX, CPU, free, no API key).
-   It is small and fast, scores well on retrieval benchmarks, and its vectors are normalised.
+3. **Embeddings**: `sentence-transformers/all-MiniLM-L6-v2` through FastEmbed (ONNX, CPU, free,
+   no API key). 384-dim normalised vectors, 256-token limit (fits our 800-char chunks). We first
+   tried `bge-small-en-v1.5`, but on our CPU it embedded only ~5 docs/s (~95 min for the catalogue);
+   MiniLM is ~20× faster with comparable retrieval quality for short product text.
 4. **Vector store**: **FAISS** (`MAX_INNER_PRODUCT`, so scores are cosine similarity), saved to
    `vectorstore/faiss_index` and loaded at startup. All metadata (price, brand, rating…) is
    kept on each chunk.

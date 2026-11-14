@@ -12,8 +12,8 @@ CLEAN_CSV = ROOT / "data" / "processed" / "products_clean.csv"
 INDEX_DIR = ROOT / "vectorstore" / "faiss_index"
 
 # --- Embeddings -------------------------------------------------------------
-# Small, free, runs locally on CPU (ONNX via FastEmbed). 384-dim, normalised.
-EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+# Small, fast, free; runs locally on CPU (ONNX via FastEmbed). 384-dim, max 256 tokens.
+EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # --- Chunking ---------------------------------------------------------------
 # One document per product. Only descriptions longer than CHUNK_SIZE characters
