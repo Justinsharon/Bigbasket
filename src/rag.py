@@ -1,6 +1,7 @@
 """Retrieval (hybrid BM25 + FAISS) -> context -> LLM -> grounded answer."""
 import re
 from dataclasses import dataclass, field
+from itertools import zip_longest
 
 from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
@@ -54,6 +55,64 @@ def parse_price_filter(question: str) -> tuple[float | None, float | None]:
     return lo, hi
 
 
+STOPWORDS = set("""a an the is are was of for to in on and or vs versus with what which who how
+do does i me my you your please tell show suggest give find get some any can could should
+compare comparison between price cost much than it its this that these those""".split())
+
+
+def bm25_tokenize(text: str) -> list[str]:
+    """Lower-case word tokens without punctuation or filler words ("Yippee?" -> "yippee")."""
+    return [t for t in re.findall(r"[a-z0-9]+", text.lower()) if t not in STOPWORDS]
+
+
+_TAIL = r"(?:\s+(?:on|by|in terms of|based on|for|regarding)\s+.*)?$"
+COMPARE_PATTERNS = [
+    rf"compare\s+(.+?)\s+(?:and|with|to|vs\.?|versus)\s+(.+?){_TAIL}",
+    rf"(?:difference|differences)\s+between\s+(.+?)\s+and\s+(.+?){_TAIL}",
+    rf"(?:cheaper|better|healthier|costlier)\s*[:,]?\s+(.+?)\s+or\s+(.+?){_TAIL}",
+    rf"^(.+?)\s+(?:vs\.?|versus)\s+(.+?){_TAIL}",
+]
+
+
+def decompose_comparison(question: str) -> list[str]:
+    """Query decomposition: 'Compare X and Y on price' -> ['X', 'Y'] (empty if not a comparison)."""
+    q = question.lower().strip().rstrip("?.!")
+    for p in COMPARE_PATTERNS:
+        if m := re.search(p, q):
+            parts = [s.strip(" ,:") for s in m.groups() if s and s.strip(" ,:")]
+            if len(parts) == 2:
+                return parts
+    return []
+
+
+SORT_RULES = [
+    (r"cheapest|lowest price|least expensive|most affordable|budget", ("sale_price", False)),
+    (r"most expensive|costliest|highest price", ("sale_price", True)),
+    (r"(?:highest|biggest|best|maximum|most|largest)\s+(?:discount|deal|offer|savings?)", ("discount_pct", True)),
+    (r"(?:best|highest|top)[ -]rated|highest rating|best rating", ("rating", True)),
+]
+
+
+def detect_sort(question: str):
+    q = question.lower()
+    for pattern, rule in SORT_RULES:
+        if re.search(pattern, q):
+            return rule
+    return None
+
+
+def dedupe(docs: list[Document]) -> list[Document]:
+    """Keep one chunk per product listing (same name, brand and price)."""
+    seen, out = set(), []
+    for d in docs:
+        m = d.metadata
+        key = (m["product"].lower(), m["brand"].lower(), m["sale_price"])
+        if key not in seen:
+            seen.add(key)
+            out.append(d)
+    return out
+
+
 @dataclass
 class RAGResult:
     answer: str
@@ -71,38 +130,65 @@ class BigBasketRAG:
         )
         # Build the keyword index from the same chunks that are in FAISS.
         all_docs = list(self.vectorstore.docstore._dict.values())
-        self.bm25 = BM25Retriever.from_documents(all_docs, k=config.CANDIDATE_POOL)
+        self.bm25 = BM25Retriever.from_documents(
+            all_docs, k=config.CANDIDATE_POOL, preprocess_func=bm25_tokenize
+        )
         self.llm = self._build_llm()
 
     # ---------------------------------------------------------------- LLM
     def _build_llm(self):
+        """Ordered list of chat models: primary first, then fallbacks."""
         key = config.get_api_key()
         if not key:
             return None
-
-        def make(model):
-            return ChatOpenAI(
-                model=model, base_url=config.OPENROUTER_BASE_URL, api_key=key,
-                temperature=0, max_tokens=700, timeout=60, max_retries=1,
+        return [
+            ChatOpenAI(
+                model=m, base_url=config.OPENROUTER_BASE_URL, api_key=key,
+                temperature=0, max_tokens=2000, timeout=60, max_retries=0,
+                # Reasoning models otherwise spend the whole budget "thinking".
+                extra_body={"reasoning": {"effort": "low"}},
             )
+            for m in [config.PRIMARY_MODEL, *config.FALLBACK_MODELS]
+        ]
 
-        primary = make(config.PRIMARY_MODEL)
-        return primary.with_fallbacks([make(m) for m in config.FALLBACK_MODELS])
+    def _generate(self, context: str, question: str) -> tuple[str, str]:
+        """Try each model in turn; skip ones that error (e.g. 429) or return an empty/cut-off answer."""
+        errors = []
+        for llm in self.llm:
+            try:
+                msg = (PROMPT | llm).invoke({"context": context, "question": question})
+                text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                if text.strip() and msg.response_metadata.get("finish_reason") != "length":
+                    return text.strip(), llm.model_name
+                errors.append(f"{llm.model_name}: empty/truncated")
+            except Exception as e:
+                errors.append(f"{llm.model_name}: {type(e).__name__}")
+        raise RuntimeError("; ".join(errors))
 
     # ---------------------------------------------------------- retrieval
+    def _search(self, query: str, mode: str) -> tuple[list[Document], float]:
+        """One retrieval pass: vector (+ BM25 fused with RRF in hybrid mode)."""
+        vec = self.vectorstore.similarity_search_with_score(query, k=config.CANDIDATE_POOL)
+        best = max((s for _, s in vec), default=0.0)
+        vec_docs = [d for d, _ in vec]
+        if mode == "hybrid":
+            return self._rrf([vec_docs, self.bm25.invoke(query)]), float(best)
+        return vec_docs, float(best)
+
     def retrieve(self, question: str, mode: str = "hybrid", k: int = config.TOP_K):
-        """Return (docs, best_semantic_score, price_filter)."""
+        """Return (docs, best_semantic_score, price_filter).
+
+        Steps: query decomposition for comparisons -> hybrid search per sub-query ->
+        price filter -> de-duplicate -> optional sort by price/discount/rating.
+        """
         lo, hi = parse_price_filter(question)
 
-        vec = self.vectorstore.similarity_search_with_score(question, k=config.CANDIDATE_POOL)
-        best_score = max((s for _, s in vec), default=0.0)
-        vec_docs = [d for d, _ in vec]
-
-        if mode == "hybrid":
-            kw_docs = self.bm25.invoke(question)
-            ranked = self._rrf([vec_docs, kw_docs])
-        else:
-            ranked = vec_docs
+        ranked, best = self._search(question, mode)
+        sub_queries = decompose_comparison(question)
+        if sub_queries:
+            # Interleave results so every compared item is represented in the top-k.
+            lists = [self._search(sq, mode)[0] for sq in sub_queries] + [ranked]
+            ranked = [d for group in zip_longest(*lists) for d in group if d is not None]
 
         if lo is not None or hi is not None:
             ranked = [
@@ -110,7 +196,15 @@ class BigBasketRAG:
                 if (lo is None or d.metadata["sale_price"] >= lo)
                 and (hi is None or d.metadata["sale_price"] <= hi)
             ]
-        return ranked[:k], float(best_score), (lo, hi)
+
+        ranked = dedupe(ranked)
+        if sort := detect_sort(question):
+            key, reverse = sort
+            window = ranked[:config.SORT_WINDOW]  # sort only among relevant candidates
+            window.sort(key=lambda d: (d.metadata.get(key) is None,
+                                       -(d.metadata.get(key) or 0) if reverse else (d.metadata.get(key) or 0)))
+            ranked = window + ranked[config.SORT_WINDOW:]
+        return ranked[:k], best, (lo, hi)
 
     @staticmethod
     def _rrf(result_lists: list[list[Document]]) -> list[Document]:
@@ -140,11 +234,9 @@ class BigBasketRAG:
             context = f"(Products were pre-filtered to price range: {pf[0] or 0} – {pf[1] or 'any'} ₹)\n\n" + context
 
         try:
-            msg = (PROMPT | self.llm).invoke({"context": context, "question": question})
-            text = msg.content if isinstance(msg.content, str) else str(msg.content)
-            model = (msg.response_metadata or {}).get("model_name")
-        except Exception as e:  # rate limits / provider errors on free models
-            return RAGResult(f"⚠️ The language model is unavailable right now ({type(e).__name__}). "
+            text, model = self._generate(context, question)
+        except Exception as e:  # every model rate-limited / failing (free tier)
+            return RAGResult(f"⚠️ The language models are unavailable right now ({e}). "
                              "Please retry in a moment. Retrieved products are shown below.", docs, best, pf)
         # Fallback layer 2 is in the prompt (rule 4): the LLM says when context is insufficient.
-        return RAGResult(text.strip(), docs, best, pf, model=model)
+        return RAGResult(text, docs, best, pf, model=model)

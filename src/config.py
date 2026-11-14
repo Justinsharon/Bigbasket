@@ -25,9 +25,11 @@ CHUNK_OVERLAP = 100
 TOP_K = 6            # chunks passed to the LLM
 CANDIDATE_POOL = 40  # candidates fetched from each retriever before fusion/filtering
 RRF_K = 60           # reciprocal-rank-fusion constant (standard value)
+SORT_WINDOW = 15     # for "cheapest"/"highest discount"/"best rated": re-sort this many top hits
 # If the best semantic (cosine) match is below this, we answer with the fallback
-# message without calling the LLM. Tuned on test questions (see README).
-RELEVANCE_THRESHOLD = 0.60
+# message without calling the LLM. Tuned on test questions: in-catalogue questions
+# scored 0.61-0.72, off-topic ones 0.21-0.40 (see README).
+RELEVANCE_THRESHOLD = 0.45
 
 # --- LLM (OpenRouter, OpenAI-compatible API) -------------------------------
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -36,6 +38,7 @@ PRIMARY_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 FALLBACK_MODELS = [
     "google/gemma-4-31b-it:free",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3.5-super-vl:free",
 ]
 
 

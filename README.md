@@ -57,18 +57,61 @@ CSV ──► clean ──► one document per product ──► chunk long desc
 4. **Vector store**: **FAISS** (`MAX_INNER_PRODUCT`, so scores are cosine similarity), saved to
    `vectorstore/faiss_index` and loaded at startup. All metadata (price, brand, rating…) is
    kept on each chunk.
-5. **Retrieval (Hybrid RAG)**: we fetch 40 candidates from **FAISS** (semantic: "healthy breakfast" →
-   oats) and 40 from **BM25** (keyword: exact brands such as "Saffola", "Yippee"), then merge the
-   two lists with **Reciprocal Rank Fusion**, `score = Σ 1/(60 + rank)`. Price phrases such as
-   "under ₹150" or "between 100 and 300" are parsed and used to **filter by metadata**, because
-   vector search cannot compare numbers. The top-k (default 6) chunks go to the LLM.
-6. **LLM + context**: an OpenRouter model (default `google/gemma-4-26b-a4b-it:free`, with a fallback
-   chain for rate limits) at temperature 0. The system prompt tells it to answer only from the
-   context, name the products, and never invent ratings or services.
-7. **Answer + fallback**: there are two layers. (a) If the best semantic similarity is below **0.60**,
-   the bot returns a fixed "not in the catalogue" message **without calling the LLM**. (b) Otherwise
-   the prompt tells the LLM to say when the context is insufficient, or which part of a
-   multi-part question it cannot answer. The UI shows the source chunks under every answer.
+5. **Retrieval (Hybrid RAG + query decomposition)**
+   - **Hybrid**: we fetch 40 candidates from **FAISS** (semantic: "healthy breakfast" → oats) and 40 from
+     **BM25** (keyword: exact brands such as "Saffola", "Yippee"; text is lower-cased and filler words
+     are removed), then merge the two lists with **Reciprocal Rank Fusion**, `score = Σ 1/(60 + rank)`.
+   - **Query decomposition** (for comparisons): "Compare Tata Tea and Red Label tea on price" →
+     sub-queries `tata tea` and `red label tea`. Each one is retrieved separately and the results are
+     interleaved, so both items appear in the context. Without this, one brand filled the top-k.
+   - **Metadata filtering and sorting**: price phrases ("under ₹150", "between 100 and 300") filter on
+     `sale_price`; "cheapest", "highest discount" and "best rated" re-sort the top 15 relevant
+     candidates by price, discount or rating. Vector search can't compare numbers, so we do it here.
+   - **De-duplication**: one chunk per listing (same name, brand and price). The top **k = 6** go to the LLM.
+6. **LLM + context**: OpenRouter (`google/gemma-4-26b-a4b-it:free` first, then other free models),
+   temperature 0. If a model is rate-limited (429) or returns an empty or truncated answer (reasoning
+   models can spend the whole token budget "thinking"), we try the next one. The system prompt
+   tells it to answer only from the context, name the products, and never invent ratings or services.
+7. **Answer + fallback**: there are two layers. (a) **Relevance gate**: if the best semantic similarity
+   is below **0.45**, the bot returns a fixed "not in the catalogue" message **without calling the
+   LLM**. We chose the threshold from the test questions: in-catalogue questions scored 0.61–0.84 and
+   off-topic ones 0.21–0.40. (b) **Prompt rule**: the LLM says when the context is insufficient, or
+   which part of a multi-part question it can't answer. The UI shows the source chunks under every answer.
+
+## Evaluation
+`python evaluate.py` runs 11 test questions and writes [`docs/evaluation.md`](docs/evaluation.md):
+it records the best similarity, whether the retrieved chunks contain the needed evidence (vector-only
+vs hybrid), whether the bot fell back, and the full answer.
+
+| Type | Example | Result |
+|---|---|---|
+| Factual | What is Himalaya Neem Face Wash used for? | ✅ evidence retrieved, grounded answer |
+| Comparison | Which is cheaper: Maggi or Yippee noodles? | ✅ both brands retrieved (after query decomposition) |
+| Multi-part | Gluten-free snack under ₹150 + its brand and rating | ✅ price filter applied, unrated items say "Not rated" |
+| Sorting | Cheapest basmati rice? | ✅ Fortune Rozana ₹71 |
+| Unsupported | Delivery to Pune in 10 min / refund policy / cricket | ✅ all fall back (similarity 0.31–0.36) |
+
+**Improvements found by testing:**
+- BM25 originally split on whitespace only, so "Yippee?" never matched "YiPPee!". Normalising the
+  tokens fixed it.
+- Comparisons returned only one brand until we added query decomposition.
+- A 0.60 threshold would have rejected "Saffola Gold oil" (0.617). We lowered it to 0.45.
+- Empty answers came from reasoning models running out of tokens. We now detect them and fall back.
+
+### Failure cases and how we would fix them
+1. **Overclaiming on "highest" questions.** For *"Which baby diapers have the highest discount?"*,
+   the LLM said "the highest discount **in the catalogue** is 28%", but we only sort the top 15
+   retrieved diapers, not all of them. *Fix:* send aggregate questions (max, min, count) to a
+   structured pandas query over the cleaned CSV, or have the prompt say "among the matching products".
+2. **Brand-only comparisons drift off-topic.** For *"Compare Amul and Nestle milk products"*, the
+   sub-query `amul` loses the word "milk" and retrieves Amul cookies and butter. *Fix:* carry the
+   shared noun into each sub-query (`amul milk products`), decompose with the LLM instead of regex,
+   or filter by category/type metadata.
+3. **Missing pack size.** *"Price of Saffola Gold oil?"* returns ₹1,024 and ₹2,525 listings, and the
+   dataset has no size column to explain the difference. *Fix:* extract pack size and unit from the
+   product name or description into metadata and add it to the chunk header.
+4. **Free-tier LLM reliability.** Free models get rate-limited and change often. *Fix (in place):*
+   a model fallback chain. For the demo, a paid model costing a few cents.
 
 ## Project structure
 ```
@@ -77,7 +120,8 @@ evaluate.py         Test questions → docs/evaluation.md
 src/config.py       All settings (chunk size, k, threshold, models)
 src/ingest.py       Clean → chunk → embed → FAISS
 src/embeddings.py   Embedding model (shared by ingest + query)
-src/rag.py          Hybrid retrieval, price filter, fallback, LLM chain
+src/rag.py          Hybrid retrieval, decomposition, filters, fallback, LLM chain
+docs/evaluation.md  Test results
 data/raw/           Original Kaggle CSV
 vectorstore/        Saved FAISS index
 ```
