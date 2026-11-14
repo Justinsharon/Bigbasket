@@ -408,3 +408,9 @@ details.rd .kv b { color: var(--muted); font-weight: 500; }
   .fab span { display: none; } .fab { padding: 8px; }
   .drawer, .ai-dr { width: 100%; }
 }
+
+/* keep clear of Streamlit Cloud's hosting badges in the bottom-right corner */
+.fab { bottom: 78px; }
+.ai-dr .df, #cartFoot { padding-bottom: 22px; }
+.chat-opts { padding-right: 96px; }
+@media (max-width: 640px) { .fab { bottom: 84px; } }
