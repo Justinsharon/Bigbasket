@@ -40,7 +40,8 @@ ss.setdefault("store_details", {})   # {id: description}
 noop = lambda: None  # noqa: E731
 res = storefront()(
     key="store",
-    data={"chat": ss.store_chat, "search": ss.store_search, "details": ss.store_details},
+    data={"chat": ss.store_chat, "search": ss.store_search, "details": ss.store_details,
+          "demo": st.query_params.get("demo") == "1"},
     on_search_change=noop, on_ask_change=noop, on_details_change=noop, on_nav_change=noop,
     on_clearchat_change=noop,
 )

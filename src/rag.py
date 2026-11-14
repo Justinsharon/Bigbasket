@@ -14,18 +14,18 @@ from src import config
 from src.embeddings import get_embeddings
 
 FALLBACK_MESSAGE = (
-    "I couldn't find information about that in the BigBasket product catalogue. "
-    "I can only answer questions about products, brands, categories, prices, discounts, "
-    "ratings and product descriptions available in the dataset."
+    "Sorry, I couldn't find that in our store. I can help you with products, brands, "
+    "prices, offers and ratings. Try asking about something you'd like to buy!"
 )
 
 SYSTEM_PROMPT = """You are the BigBasket Product Assistant, helping shoppers on an Indian online grocery store.
 
 Rules:
 1. Answer ONLY using the product context below. Do not use outside knowledge about products, prices, brands or BigBasket's services.
+   Speak to the shopper as the store's friendly assistant. Never mention "context", "catalogue data", "dataset", retrieval or how you work.
 2. Always mention the exact product name and brand you are referring to. Prices are in Indian Rupees (₹).
 3. For comparisons, compare only on attributes present in the context (price, MRP, discount, rating, description).
-4. If the context does not contain the information needed (e.g. delivery times, stock, return policy, offers, nutrition values not stated), reply that the catalogue does not have that information. Do not guess. If only part of the question can be answered, answer that part and say which part is not covered.
+4. If the context does not contain the information needed (e.g. delivery times, stock, return policy, offers, nutrition values not stated), say you don't have that information in the store. Do not guess. If only part of the question can be answered, answer that part and say which part is not covered.
 5. If a product is "Not rated", say so; never invent ratings.
 6. Keep answers concise; use a short list or table when listing several products.
 
@@ -239,8 +239,8 @@ class BigBasketRAG:
             return RAGResult(FALLBACK_MESSAGE, docs, best, pf, used_fallback=True)
 
         if self.llm is None:
-            return RAGResult("⚠️ No LLM API key is configured (OPENROUTER_API_KEY or GEMINI_API_KEY), "
-                             "so I can't generate an answer. The retrieved products are shown below.",
+            return RAGResult("Our assistant is taking a short break. Here are some products that match "
+                             "what you asked for.",
                              docs, best, pf)
 
         context = "\n\n---\n\n".join(d.page_content for d in docs)
@@ -250,7 +250,7 @@ class BigBasketRAG:
         try:
             text, model = self._generate(context, question)
         except Exception as e:  # every model rate-limited / failing (free tier)
-            return RAGResult(f"⚠️ The language models are unavailable right now ({e}). "
-                             "Please retry in a moment. Retrieved products are shown below.", docs, best, pf)
+            return RAGResult("Sorry, I'm a little busy right now. Please try again in a moment. "
+                             "Meanwhile, here are some products that match what you asked for.", docs, best, pf)
         # Fallback layer 2 is in the prompt (rule 4): the LLM says when context is insufficient.
         return RAGResult(text, docs, best, pf, model=model)

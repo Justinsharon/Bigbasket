@@ -95,7 +95,7 @@ function createApp(root) {
   <header class="top"><div class="wrap">
     <button class="logo" data-a="home"><span class="mk"><img src="${IMG}1f9fa.webp" alt=""></span>
       <span class="wm">BasketBuddy<small>FRESH · FAST</small></span></button>
-    <button class="loc" data-a="toast" data-v="Location picker is a demo · showing the full catalogue">${I.pin}<span>Bengaluru</span>${I.down}</button>
+    <button class="loc" data-a="toast" data-v="Delivering across Bengaluru">${I.pin}<span>Bengaluru</span>${I.down}</button>
     <div class="searchbox"><form id="sf" autocomplete="off">${I.search}
       <input id="sq" placeholder="Search fruits, vegetables, groceries…" aria-label="Search products"></form>
       <div class="sugg" id="sg"></div></div>
@@ -105,12 +105,9 @@ function createApp(root) {
   </div></header>
   <main class="wrap" id="view"><div class="loading"><img src="${IMG}1f9fa.webp" alt="">Loading fresh picks…</div></main>
   <footer class="foot"><div class="wrap">
-    <div><b>BasketBuddy</b> · demo grocery store with a RAG shopping assistant.<br>
-      Catalogue: Kaggle “BigBasket Entire Product List” (CC BY-NC-SA 4.0), a dataset snapshot. Not affiliated with or endorsed
-      by BigBasket. No real orders, coupons or payments.</div>
-    <div>Photos: <a href="https://unsplash.com/?${UTM}" target="_blank" rel="noopener">Unsplash</a> photographers
-      (<button data-a="credits">credits</button>) · Illustrations: Microsoft Fluent Emoji (MIT)<br>
-      <button data-a="classic">Open the classic Streamlit chat →</button></div>
+    <div><b>BasketBuddy</b> · Fresh groceries, fast.<br>A demo store: no real orders or payments. Not affiliated with BigBasket.</div>
+    <div>Product info: BigBasket product list on Kaggle (CC BY-NC-SA 4.0)<br>
+      Photos: <a href="https://unsplash.com/?${UTM}" target="_blank" rel="noopener">Unsplash</a> (<button data-a="credits">credits</button>) · Icons: Microsoft Fluent Emoji</div>
   </div></footer>
   <button class="fab" data-a="ai"><span class="bot"><img src="${IMG}1f916.webp" alt=""></span><span>Ask BasketBuddy AI</span></button>
   <div class="scrim" id="scrim" data-a="close"></div>
@@ -119,14 +116,14 @@ function createApp(root) {
     <div class="db" id="cartBody"></div><div class="df" id="cartFoot"></div></aside>
   <aside class="drawer ai-dr" id="aiDr" aria-label="AI assistant">
     <div class="dh"><span class="bot"><img src="${IMG}1f916.webp" alt=""></span><h3>BasketBuddy AI
-      <small>Answers only from the catalogue · says so when it doesn't know</small></h3>
+      <small>Your personal shopping assistant</small></h3>
       <button class="back" data-a="close" aria-label="Close">${I.x}</button></div>
     <div class="db" id="chatBody"></div>
     <div class="df"><form class="chat-in" id="cf" autocomplete="off">
       <input id="cq" placeholder="Ask about products, prices, comparisons…" aria-label="Ask the assistant">
       <button class="send" aria-label="Send">${I.send}</button></form>
-      <div class="chat-opts"><label>Retrieval <select id="mode"><option value="hybrid">Hybrid (BM25 + vector)</option>
-        <option value="vector">Vector only</option></select></label><button data-a="clearchat">Clear chat</button></div></div></aside>
+      <div class="chat-opts"><label id="modeWrap" style="display:none">Retrieval <select id="mode"><option value="hybrid">Hybrid (BM25 + vector)</option>
+        <option value="vector">Vector only</option></select></label><span></span><button data-a="clearchat">Clear chat</button></div></div></aside>
   <div class="modal" id="modal"><div class="scrim on" data-a="close"></div><div class="card" id="pd"></div></div>
   <div class="toast" id="toast"></div>`;
   root.appendChild(el);
@@ -260,7 +257,7 @@ function createApp(root) {
     return `
     <section class="hero">
       <div class="greet"><div><div class="hi">${greeting()} 👋</div><h1>What can we get you today?</h1>
-        <p>${P.length.toLocaleString("en-IN")} groceries and essentials, plus an AI assistant that only answers from the catalogue.</p></div>
+        <p>${P.length.toLocaleString("en-IN")} groceries and essentials, plus an AI assistant to help you choose.</p></div>
         <div class="modes"><button data-a="mode" data-v="instant" class="${S.mode === "instant" ? "on" : ""}">${I.bolt} Instant delivery</button>
           <button data-a="mode" data-v="nextday" class="${S.mode === "nextday" ? "on" : ""}">${I.clock} Next day</button></div></div>
       <div class="slot"><div class="scooter"><img src="${IMG}1f6f5.webp" alt=""></div><div>
@@ -278,7 +275,7 @@ function createApp(root) {
     ${rail("Today's best deals", deals, { a: "deals", v: "" })}
     ${rail("Fresh fruits & vegetables", fresh, { a: "cat", v: "Fruits & Vegetables" })}
     <section class="sec"><div class="aiband"><div class="bot"><img src="${IMG}1f916.webp" alt=""></div><div>
-      <h3>Not sure what to pick? Ask BasketBuddy AI</h3><p>It compares brands, finds deals within a budget, and tells you when something isn't in the catalogue.</p>
+      <h3>Not sure what to pick? Ask BasketBuddy AI</h3><p>It compares brands, finds deals within your budget, and helps you pick the right product.</p>
       <div class="qchips">${SUGGESTED.slice(0, 4).map((q) => `<button class="qchip" data-a="ask" data-v="${esc(q)}">${esc(q)}</button>`).join("")}</div></div></div></section>
     ${rail("Staples: atta, rice, dals & oils", staples, { a: "cat", v: "Foodgrains, Oil & Masala" })}
     ${rail("Dairy & bakery favourites", dairy, { a: "cat", v: "Bakery, Cakes & Dairy" })}
@@ -333,24 +330,24 @@ function createApp(root) {
     if (!res) return head(`Searching “${esc(q)}”…`, 0) + `<div class="grid">${"<div class='sk'></div>".repeat(10)}</div>`;
     const list = applyFilters(res.ids.map((id) => S.byId.get(id)).filter(Boolean), true);
     return head(`Results for “${esc(q)}”`, list.length) +
-      `<div class="ai-hint"><img src="${IMG}1f916.webp" alt=""><div><b>Want advice instead of a list?</b> Ask BasketBuddy AI about “${esc(q)}”. It answers from the catalogue only.</div>
+      `<div class="ai-hint"><img src="${IMG}1f916.webp" alt=""><div><b>Not sure which one to pick?</b> Ask BasketBuddy AI about “${esc(q)}”.</div>
        <button data-a="ask" data-v="${esc(q)}">Ask AI</button></div>${bar("Refine these results…", "Relevance")}
-       <div class="note">Ranked by hybrid search: BM25 keywords + FAISS semantic vectors, fused with RRF.</div>
+       ${S.demo ? `<div class="note">Ranked by hybrid search: BM25 keywords + FAISS semantic vectors, fused with RRF.</div>` : ""}
        ${list.length ? grid(list) : `<div class="empty"><div class="ei"><img src="${IMG}1f50d.webp" alt=""></div><b>No products found</b><p>Try another word, or ask the AI.</p></div>`}`;
   }
   function checkoutView() {
     if (S.view.done) return `<div class="done"><div class="ei"><img src="${IMG}1f6f5.webp" alt=""></div><h1>Order placed! 🎉</h1>
       <p>Order <b>#${S.view.done}</b> ${S.view.mode === "instant" ? "is being packed and will arrive in about 10 minutes." : "is scheduled for tomorrow, 7am – 9am."}</p>
-      <p class="demo-note">This is a demo store. No real order was placed and nothing was charged.</p>
+      <p class="demo-note">This is a demo store, so no real order was placed.</p>
       <button class="cta" data-a="home" style="max-width:260px;margin:16px auto 0;justify-content:center">Continue shopping</button></div>`;
     const t = totals();
     if (!t.items) return head("Checkout", 0) + `<div class="empty"><div class="ei"><img src="${IMG}1f6d2.webp" alt=""></div><b>Your cart is empty</b></div>`;
     return head("Checkout", t.items) + `<div class="co"><div>
-      <div class="box"><h4>Delivery address</h4><div class="opt on">${I.pin}<div><b>Home</b><br><span style="color:var(--muted)">12, 4th Cross, Indiranagar, Bengaluru 560001 (demo)</span></div></div></div>
+      <div class="box"><h4>Delivery address</h4><div class="opt on">${I.pin}<div><b>Home</b><br><span style="color:var(--muted)">12, 4th Cross, Indiranagar, Bengaluru 560001</span></div></div></div>
       <div class="box"><h4>Delivery slot</h4>
         <button class="opt ${S.mode === "instant" ? "on" : ""}" data-a="mode" data-v="instant" style="width:100%">${I.bolt}<b>Instant · in 10 minutes</b></button>
         <button class="opt ${S.mode === "nextday" ? "on" : ""}" data-a="mode" data-v="nextday" style="width:100%">${I.clock}<b>Next day · 7am – 9am</b></button></div>
-      <div class="box"><h4>Payment</h4><div class="opt on">💵 <b>Cash / UPI on delivery</b></div><p class="demo-note">Demo checkout: no payment details are collected.</p></div></div>
+      <div class="box"><h4>Payment</h4><div class="opt on">💵 <b>Cash / UPI on delivery</b></div><p class="demo-note">Pay when your order arrives.</p></div></div>
       <div><div class="box"><h4>Order summary · ${t.items} items</h4>${bill(t)}</div>
       <button class="cta" data-a="place"><span>${inr(t.grand)}<small>TOTAL</small></span><span>Place order ›</span></button></div></div>`;
   }
@@ -382,8 +379,8 @@ function createApp(root) {
           <button class="ask" data-a="ask" data-v="${esc(`Tell me about ${p.name} by ${p.brand}: what is it, its price and rating?`)}">✨ Ask AI</button></div>
         <h4>Product details</h4><div class="desc" id="pdDesc">${S.details[id] != null ? esc(S.details[id]) : "Loading description…"}</div>
         <h4>Information</h4><div class="facts"><span>Brand</span><span>${esc(p.brand)}</span><span>Category</span><span>${esc(p.cat)}</span>
-          <span>Type</span><span>${esc(p.type)}</span><span>Source</span><span>Kaggle BigBasket dataset</span></div>
-        ${ph ? `<p class="credit">Illustrative photo of the product type (not the exact item) by
+          <span>Type</span><span>${esc(p.type)}</span></div>
+        ${ph ? `<p class="credit">Representative photo by
           <a href="${esc(ph.author_url)}" target="_blank" rel="noopener">${esc(ph.author)}</a> on
           <a href="${esc(ph.unsplash_url)}" target="_blank" rel="noopener">Unsplash</a></p>` : ""}</div>`;
     $("modal").classList.add("on"); S.openPid = id;
@@ -393,7 +390,7 @@ function createApp(root) {
   function renderChat() {
     let h = "";
     if (!S.chat.length && !S.pendingQ) h = `<div class="welcome"><div class="bot"><img src="${IMG}1f916.webp" alt=""></div><h4>Hi! I'm BasketBuddy AI</h4>
-      <p>I search ${S.P.length.toLocaleString("en-IN")} catalogue products and answer only from what I find.</p>
+      <p>Ask me about products, prices, brands and deals. I’ll find the best options for you.</p>
       <div class="qchips">${SUGGESTED.map((q) => `<button class="qchip" data-a="ask" data-v="${esc(q)}">${esc(q)}</button>`).join("")}</div></div>`;
     S.chat.forEach((m, i) => {
       if (m.role === "user") { h += `<div class="msg u"><div class="bub">${esc(m.content)}</div></div>`; return; }
@@ -408,10 +405,10 @@ function createApp(root) {
       h += `<div class="msg a"><div class="bub ${meta.fallback ? "fb" : ""}">${md(m.content)}
         ${!meta.fallback && prods.length ? `<div class="mini-rail">${prods.map(mcard).join("")}</div>
           <div class="links"><button data-a="showids" data-i="${i}">View these ${prods.length} in the store ›</button></div>` : ""}
-        <details class="rd"><summary>How I found this</summary><div class="kv">${kv.map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join("")}</div></details></div></div>`;
+        ${S.demo ? `<details class="rd"><summary>How I found this</summary><div class="kv">${kv.map(([k, v]) => `<b>${esc(k)}</b><span>${esc(v)}</span>`).join("")}</div></details>` : ""}</div></div>`;
     });
     if (S.pendingQ) h += `<div class="msg u"><div class="bub">${esc(S.pendingQ)}</div></div><div><span class="typing"><i></i><i></i><i></i></span>
-      <div class="typing-l">Searching the catalogue and writing a grounded answer…</div></div>`;
+      <div class="typing-l">Finding the best options for you…</div></div>`;
     const b = $("chatBody"); b.innerHTML = h; b.scrollTop = b.scrollHeight;
   }
   function ask(q) {
@@ -498,6 +495,8 @@ function createApp(root) {
   // ------------------------------------------------------------ data from Python
   S.update = (data) => {
     S.data = data || {};
+    // Presenter view (?demo=1): show retrieval internals for the class demo; hidden for shoppers.
+    if (!!S.data.demo !== S.demo) { S.demo = !!S.data.demo; $("modeWrap").style.display = S.demo ? "" : "none"; render(); renderChat(); }
     if (S.data.search && (!S.search || S.data.search.nonce !== S.search.nonce)) {
       S.search = S.data.search; if (S.view.name === "search" && S.view.q === S.search.q) render(); }
     if (Array.isArray(S.data.chat)) {
@@ -518,7 +517,7 @@ function createApp(root) {
     S.wish = S.wish.filter((id) => S.byId.has(id));
     S.ready = true; renderTop(); render(); S.update(S.data);
     fetch(PHOTOS).then((r) => (r.ok ? r.json() : {})).then((ph) => { S.photos = ph || {}; render(); }).catch(() => {});
-  }).catch(() => { $("view").innerHTML = `<div class="empty"><b>Couldn't load the catalogue.</b><p>Please refresh the page.</p></div>`; });
+  }).catch(() => { $("view").innerHTML = `<div class="empty"><b>Couldn't load the store.</b><p>Please refresh the page.</p></div>`; });
 
   return S;
 }
