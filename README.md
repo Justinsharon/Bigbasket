@@ -68,8 +68,10 @@ CSV ──► clean ──► one document per product ──► chunk long desc
      `sale_price`; "cheapest", "highest discount" and "best rated" re-sort the top 15 relevant
      candidates by price, discount or rating. Vector search can't compare numbers, so we do it here.
    - **De-duplication**: one chunk per listing (same name, brand and price). The top **k = 6** go to the LLM.
-6. **LLM + context**: OpenRouter (`google/gemma-4-26b-a4b-it:free` first, then other free models),
-   temperature 0. If a model is rate-limited (429) or returns an empty or truncated answer (reasoning
+6. **LLM + context**: a chain of free models across two providers, all called through the
+   OpenAI-compatible API: OpenRouter `gemma-4-26b-a4b-it:free` → `gemma-4-31b-it:free` →
+   **Google Gemini** `gemini-3.5-flash` → `gemini-flash-lite-latest` → OpenRouter `nemotron-3-ultra`.
+   Temperature 0. Providers without a key are skipped. If a model is rate-limited (429) or returns an empty or truncated answer (reasoning
    models can spend the whole token budget "thinking"), we try the next one. The system prompt
    tells it to answer only from the context, name the products, and never invent ratings or services.
 7. **Answer + fallback**: there are two layers. (a) **Relevance gate**: if the best semantic similarity
@@ -113,6 +115,11 @@ vs hybrid), whether the bot fell back, and the full answer.
 4. **Free-tier LLM reliability.** Free models get rate-limited and change often. *Fix (in place):*
    a model fallback chain. For the demo, a paid model costing a few cents.
 
+## Screenshots
+| Welcome | Comparison with product cards | Unsupported question → fallback |
+|---|---|---|
+| ![](docs/screenshots/1-welcome.png) | ![](docs/screenshots/2-comparison.png) | ![](docs/screenshots/3-fallback.png) |
+
 ## Project structure
 ```
 app.py              Streamlit chat UI
@@ -126,10 +133,20 @@ data/raw/           Original Kaggle CSV
 vectorstore/        Saved FAISS index
 ```
 
-## Setup
+## Run locally
 ```bash
 pip install -r requirements.txt
-cp .env.example .env          # add your OpenRouter key (free at openrouter.ai/keys)
-python -m src.ingest          # only needed if vectorstore/faiss_index is missing
-streamlit run app.py
+cp .env.example .env          # add OPENROUTER_API_KEY and/or GEMINI_API_KEY
+streamlit run app.py          # the prebuilt index in vectorstore/ loads in about 6 s
 ```
+Rebuild the index (only if you change the data or chunking): `python -m src.ingest` (about 12 min on CPU).
+
+## Deploy on Streamlit Community Cloud
+1. Go to [share.streamlit.io](https://share.streamlit.io) → **Create app** → *Deploy a public app from GitHub*.
+2. Repository `Justinsharon/Bigbasket`, branch `main`, main file `app.py`.
+3. **Advanced settings** → Python **3.13**, then under **Secrets** paste:
+   ```toml
+   OPENROUTER_API_KEY = "sk-or-..."
+   GEMINI_API_KEY = "AIza..."
+   ```
+4. Deploy. The first start downloads the embedding model (about 90 MB) and loads the index.

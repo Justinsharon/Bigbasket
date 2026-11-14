@@ -1,5 +1,6 @@
 """Retrieval (hybrid BM25 + FAISS) -> context -> LLM -> grounded answer."""
 import re
+import time
 from dataclasses import dataclass, field
 from itertools import zip_longest
 
@@ -121,6 +122,9 @@ class RAGResult:
     price_filter: tuple = (None, None)
     used_fallback: bool = False
     model: str | None = None
+    sub_queries: list[str] = field(default_factory=list)  # query decomposition, if any
+    sort: tuple | None = None                              # (field, descending) if re-sorted
+    seconds: float = 0.0
 
 
 class BigBasketRAG:
@@ -138,18 +142,19 @@ class BigBasketRAG:
     # ---------------------------------------------------------------- LLM
     def _build_llm(self):
         """Ordered list of chat models: primary first, then fallbacks."""
-        key = config.get_api_key()
-        if not key:
-            return None
-        return [
-            ChatOpenAI(
-                model=m, base_url=config.OPENROUTER_BASE_URL, api_key=key,
-                temperature=0, max_tokens=2000, timeout=60, max_retries=0,
+        models = []
+        for provider, model in config.MODEL_CHAIN:
+            p = config.PROVIDERS[provider]
+            key = config.get_secret(p["key_name"])
+            if not key:
+                continue  # provider not configured
+            models.append(ChatOpenAI(
+                model=model, base_url=p["base_url"], api_key=key,
+                temperature=0, max_tokens=2000, timeout=45, max_retries=0,
                 # Reasoning models otherwise spend the whole budget "thinking".
-                extra_body={"reasoning": {"effort": "low"}},
-            )
-            for m in [config.PRIMARY_MODEL, *config.FALLBACK_MODELS]
-        ]
+                extra_body=p["extra_body"],
+            ))
+        return models or None
 
     def _generate(self, context: str, question: str) -> tuple[str, str]:
         """Try each model in turn; skip ones that error (e.g. 429) or return an empty/cut-off answer."""
@@ -219,6 +224,14 @@ class BigBasketRAG:
 
     # -------------------------------------------------------------- answer
     def answer(self, question: str, mode: str = "hybrid", k: int = config.TOP_K) -> RAGResult:
+        t0 = time.time()
+        res = self._answer(question, mode, k)
+        res.sub_queries = decompose_comparison(question)
+        res.sort = detect_sort(question)
+        res.seconds = time.time() - t0
+        return res
+
+    def _answer(self, question: str, mode: str, k: int) -> RAGResult:
         docs, best, pf = self.retrieve(question, mode, k)
 
         # Fallback layer 1: nothing relevant enough in the catalogue.
@@ -226,8 +239,9 @@ class BigBasketRAG:
             return RAGResult(FALLBACK_MESSAGE, docs, best, pf, used_fallback=True)
 
         if self.llm is None:
-            return RAGResult("⚠️ OPENROUTER_API_KEY is not set, so I can't generate an answer. "
-                             "The retrieved products are shown below.", docs, best, pf)
+            return RAGResult("⚠️ No LLM API key is configured (OPENROUTER_API_KEY or GEMINI_API_KEY), "
+                             "so I can't generate an answer. The retrieved products are shown below.",
+                             docs, best, pf)
 
         context = "\n\n---\n\n".join(d.page_content for d in docs)
         if pf != (None, None):
