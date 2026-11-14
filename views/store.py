@@ -1,4 +1,5 @@
 """Storefront page: an HTML/CSS/JS component backed by the RAG pipeline."""
+import hashlib
 import time
 from pathlib import Path
 
@@ -21,8 +22,17 @@ st.markdown(
 )
 
 
+def _frontend_version() -> str:
+    """Fingerprint of the storefront files, so a redeploy never serves stale UI code."""
+    h = hashlib.sha1()
+    for name in ("store.css", "store.js"):
+        h.update((FRONTEND / name).read_bytes())
+    return h.hexdigest()[:12]
+
+
 @st.cache_resource
-def storefront():
+def storefront(version: str):
+    # `version` is part of the cache key: new frontend code → new component definition.
     return st.components.v2.component(
         "basketbuddy_store",
         html="",
@@ -38,7 +48,7 @@ ss.setdefault("store_search", None)  # {q, ids, nonce}
 ss.setdefault("store_details", {})   # {id: description}
 
 noop = lambda: None  # noqa: E731
-res = storefront()(
+res = storefront(_frontend_version())(
     key="store",
     data={"chat": ss.store_chat, "search": ss.store_search, "details": ss.store_details,
           "demo": st.query_params.get("demo") == "1"},
