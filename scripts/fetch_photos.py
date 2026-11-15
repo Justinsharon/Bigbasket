@@ -31,7 +31,7 @@ QUERIES = {
     "🧴": "skincare products", "🌸": "perfume bottle", "🌿": "herbs leaves", "🌶️": "indian spices",
     "🥛": "milk bottle", "🥣": "breakfast cereal bowl", "🫙": "pickle jar", "🧼": "soap bar",
     "🥜": "mixed nuts", "🍪": "cookies", "🍫": "chocolate bar", "🥨": "indian namkeen snack",
-    "🧽": "cleaning sponge", "☕": "coffee cup", "🌾": "flour bowl", "🫖": "tea pot",
+    "🧽": "cleaning sponge", "☕": "coffee cup", "🌾": "flour", "🫖": "tea pot",
     "🍶": "glass bottle", "🧀": "cheese block", "🍵": "tea cup", "🍬": "candy sweets",
     "🧺": "laundry detergent", "🕯️": "candles", "🍚": "basmati rice", "🍽️": "dinner plate",
     "🪥": "toothbrush", "🫘": "lentils", "💆": "hair oil", "🧷": "baby diapers",
@@ -43,8 +43,8 @@ QUERIES = {
     "🥥": "coconut", "🧻": "toilet paper rolls", "🍝": "pasta", "🥢": "soy sauce bottle",
     "🧈": "butter block", "🍛": "indian curry", "🍯": "honey", "🧹": "broom",
     "🎂": "cake decorating", "✏️": "pencils", "📒": "notebooks", "🧂": "salt shaker",
-    "🚽": "bathroom cleaning spray", "🥬": "fresh spinach leaves", "🍅": "tomatoes", "😷": "surgical face mask",
-    "🗑️": "kitchen dustbin", "🫓": "papad", "🔪": "kitchen knife", "🌮": "nachos",
+    "🚽": "toilet cleaning", "🥬": "fresh spinach leaves", "🍅": "tomatoes", "😷": "surgical face mask",
+    "🗑️": "kitchen dustbin", "🫓": "papadum", "🔪": "kitchen knife", "🌮": "nachos",
     "💄": "lipstick", "🪣": "bucket", "💊": "medicine tablets", "🍨": "ice cream",
     "🥟": "samosa", "👕": "clothes hanger", "💅": "nail polish", "🧔": "beard oil",
     "🍘": "crackers", "🐟": "fresh fish", "🍼": "baby bottle", "🛁": "bath salts",
@@ -74,7 +74,7 @@ QUERIES = {
 
 
 # Concepts where Unsplash kept returning poor matches after review: keep the 3D illustration.
-SKIP = {"🫗", "🧈", "🧂", "🗑️"}
+SKIP = {"🫗", "🧈", "🧂", "🗑️", "🚽", "🪣", "👕", "🧔", "🍘", "🐟"}
 
 
 def concepts_by_usage() -> list[str]:
@@ -90,17 +90,15 @@ def concepts_by_usage() -> list[str]:
 
 
 def call(session, url, **params):
+    """GET with rate-limit handling. Only an actual refusal (403/429) pauses: Unsplash
+    sometimes sends a stray 'X-Ratelimit-Remaining: 0' on normal responses."""
     while True:
         r = session.get(url, params=params, timeout=30)
-        if r.status_code == 403 and "Rate Limit" in r.text or r.status_code == 429:
-            print("  rate limited; waiting for the hourly limit to reset (61 min)", flush=True)
-            time.sleep(3660)
+        if (r.status_code == 403 and "Rate Limit" in r.text) or r.status_code == 429:
+            print("  hourly limit reached; retrying in 10 min", flush=True)
+            time.sleep(600)
             continue
         r.raise_for_status()
-        remaining = int(r.headers.get("X-Ratelimit-Remaining", "1"))
-        if remaining <= 0:
-            print("  hourly limit used; sleeping 10 min and retrying", flush=True)
-            time.sleep(600)
         return r
 
 
