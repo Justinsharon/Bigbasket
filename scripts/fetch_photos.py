@@ -73,6 +73,10 @@ QUERIES = {
 }
 
 
+# Concepts where Unsplash kept returning poor matches after review: keep the 3D illustration.
+SKIP = {"🫗", "🧈", "🧂", "🗑️"}
+
+
 def concepts_by_usage() -> list[str]:
     import pandas as pd
 
@@ -127,7 +131,7 @@ def main():
     s = requests.Session()
     s.headers.update({"Authorization": f"Client-ID {key}", "Accept-Version": "v1"})
     data = json.loads(OUT.read_text()) if OUT.exists() else {}
-    todo = [e for e in concepts_by_usage() if f"{codepoint(e)}" not in data and e in QUERIES]
+    todo = [e for e in concepts_by_usage() if f"{codepoint(e)}" not in data and e in QUERIES and e not in SKIP]
     print(f"{len(data)} done, {len(todo)} to fetch", flush=True)
     for e in todo:
         q = QUERIES[e]
